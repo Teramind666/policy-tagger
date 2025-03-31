@@ -22,14 +22,13 @@ priority_levels = ["High", "Medium", "Low"]
 # Tier options: 5-level or 7-level tier system
 tier_levels = [5, 7]
 
-# Session state to store tagged policies and their tags
+# Initialize session state variables if not already done
 if "tagged_policies" not in st.session_state:
     st.session_state["tagged_policies"] = []
 
 if "tags_in_use" not in st.session_state:
     st.session_state["tags_in_use"] = []
 
-# Categories, allow adding custom categories
 if "categories" not in st.session_state:
     st.session_state["categories"] = ["Privacy", "Trust and Safety", "AI", "Ethics", "Government", "HR", "Social Media", "Hate Speech"]
 
