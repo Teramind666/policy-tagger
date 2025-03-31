@@ -100,3 +100,5 @@ if st.button(f"Add Policy '{new_title}'"):
 # Export the results
 csv = df_out.to_csv(index=False).encode("utf-8")
 st.download_button("Download CSV", csv, "tagged_policies.csv", "text/csv")
+st.write("Current tagged policies: ", st.session_state["tagged_policies"])
+st.write(f"Adding new policy: {new_title} with priority {new_priority}")
