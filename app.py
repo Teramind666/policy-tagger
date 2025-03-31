@@ -11,28 +11,31 @@ tag_rules = {
     "HR": ["employee", "HR", "conduct", "behavior"],
     "social media": ["social media", "Facebook", "Twitter", "Instagram"],
     "hate speech": ["hate speech", "racism", "discrimination", "offensive language"],
+    "adult sexual behavior": ["adult sexual behavior", "sexual content", "explicit material"],
+    "general body exposure": ["general body exposure", "nudity", "body exposure"],
 }
 
 # Reverse map: keyword -> tag
 keyword_to_tag = {kw.lower(): tag for tag, kws in tag_rules.items() for kw in kws}
 
-# Priority system: Define priority levels (High > Medium > Low)
-priority_levels = ["High", "Medium", "Low"]
+# Priority system: Define priority levels (from 1 to n, where 1 is the highest priority)
+tier_levels = list(range(1, 21))  # Example: tiers from 1 to 20 (you can extend this)
 
-# Tier options: 5-level or 7-level tier system
-tier_levels = [5, 7]
-
-# Initialize session state variables if not already done
+# Session state to store tagged policies and their tags
 if "tagged_policies" not in st.session_state:
     st.session_state["tagged_policies"] = []
 
 if "tags_in_use" not in st.session_state:
     st.session_state["tags_in_use"] = []
 
+# Categories, allow adding custom categories
 if "categories" not in st.session_state:
-    st.session_state["categories"] = ["Privacy", "Trust and Safety", "AI", "Ethics", "Government", "HR", "Social Media", "Hate Speech"]
+    st.session_state["categories"] = ["Privacy", "Trust and Safety", "AI", "Ethics", "Government", "HR", "Social Media", "Hate Speech", "Adult Sexual Behavior", "General Body Exposure"]
 
-st.title("Policy Tagger (Keyword-Based with Categories, Tiers, and Multitagging Option)")
+if "linked_policies" not in st.session_state:
+    st.session_state["linked_policies"] = {}
+
+st.title("Policy Tagger (Keyword-Based with Categories, Tiers, Multitagging Control, and Policy Linking)")
 
 # Input: Upload CSV or paste titles
 upload_option = st.radio("How would you like to input policies?", ["Paste titles", "Upload CSV", "Add Manually"])
@@ -71,22 +74,39 @@ def extract_tags(title):
                 tags.add(tag)
     return list(tags)
 
-def tag_policy(title, category, tier, allow_multitagging):
+def tag_policy(title, category, tier, allow_multitagging, linked_policies):
     # Extract tags from title
     tags = extract_tags(title)
 
-    # Check if the policy should allow multitagging
-    if not allow_multitagging:
-        # Check for overlapping tags with already tagged policies
-        conflicting_tags = [tag for tag in tags if tag in st.session_state["tags_in_use"]]
-        if conflicting_tags:
-            st.warning(f"Cannot tag '{title}' because the following tags are already in use by other policies: {', '.join(conflicting_tags)}.")
+    # Check for overlapping tags with already tagged policies
+    conflicting_tags = [tag for tag in tags if tag in st.session_state["tags_in_use"]]
+    
+    if conflicting_tags:
+        st.warning(f"Cannot tag '{title}' because the following tags are already in use by other policies: {', '.join(conflicting_tags)}.")
+        return None
+
+    # Check if the policy is linked to others
+    for linked_policy in linked_policies:
+        linked_tags = [tag for tag in tags if tag in linked_policy["tags"]]
+        if linked_tags and not allow_multitagging:
+            st.warning(f"Cannot tag '{title}' with these tags because it is linked with other policies that have already been tagged with the same tag: {', '.join(linked_tags)}.")
             return None
+
+    # Check for priority conflicts (if a lower priority policy tries to be tagged after a higher priority policy)
+    for policy in st.session_state["tagged_policies"]:
+        if policy["category"] == category:
+            if policy["tier"] < tier:
+                st.warning(f"Cannot tag '{title}' because '{policy['title']}' has higher priority (tier {policy['tier']}) over this policy.")
+                return None
 
     # If no conflict, add tags to the global tags_in_use list and tagged_policies
     st.session_state["tags_in_use"].extend(tags)
-    st.session_state["tagged_policies"].append({"title": title, "category": category, "tier": tier, "tags": tags, "allow_multitagging": allow_multitagging})
+    st.session_state["tagged_policies"].append({"title": title, "category": category, "tier": tier, "tags": tags, "allow_multitagging": allow_multitagging, "linked_policies": linked_policies})
     return {"title": title, "category": category, "tier": tier, "tags": tags, "allow_multitagging": allow_multitagging}
+
+def link_policies(policy_title, linked_policy_titles):
+    st.session_state["linked_policies"][policy_title] = linked_policy_titles
+    st.success(f"Policies '{', '.join(linked_policy_titles)}' are now linked with '{policy_title}'.")
 
 # Add Policies: Allow user to specify category, tier, multitagging option, and rename policies
 if titles:
@@ -97,11 +117,13 @@ if titles:
         category = st.selectbox(f"Select category for '{renamed_title}'", st.session_state["categories"], key=f"{renamed_title}_category")
         tier = st.selectbox(f"Select tier for '{renamed_title}'", tier_levels, key=f"{renamed_title}_tier")
         allow_multitagging = st.checkbox(f"Allow multitagging for '{renamed_title}'", value=True, key=f"{renamed_title}_multitag")
-
-        if st.button(f"Tag '{renamed_title}'", key=f"{renamed_title}_tag"):
-            result = tag_policy(renamed_title, category, tier, allow_multitagging)
+        
+        linked_policies_titles = st.multiselect(f"Select linked policies for '{renamed_title}'", titles, key=f"{renamed_title}_linked")
+        if st.button(f"Tag and Link '{renamed_title}'", key=f"{renamed_title}_tag"):
+            result = tag_policy(renamed_title, category, tier, allow_multitagging, linked_policies_titles)
             if result:
                 st.success(f"Policy '{renamed_title}' tagged successfully under category '{category}' with tier '{tier}'.")
+                link_policies(renamed_title, linked_policies_titles)
 
     # Display tagged policies
     if st.session_state["tagged_policies"]:
