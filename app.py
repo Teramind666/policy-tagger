@@ -11,14 +11,16 @@ tag_rules = {
     "HR": ["employee", "HR", "conduct", "behavior"],
     "social media": ["social media", "Facebook", "Twitter", "Instagram"],
     "hate speech": ["hate speech", "racism", "discrimination", "offensive language"],
-    "adult sexual behavior": ["adult sexual behavior", "sexual content", "explicit material"],
+    "adult sexual solicitation": ["adult sexual solicitation", "solicitation", "explicit content"],
+    "adult sexual activity": ["adult sexual activity", "sexual activity", "sexual content"],
+    "adult sexual behavior": ["adult sexual behavior", "sexual behavior", "explicit material"],
     "general body exposure": ["general body exposure", "nudity", "body exposure"],
 }
 
 # Reverse map: keyword -> tag
 keyword_to_tag = {kw.lower(): tag for tag, kws in tag_rules.items() for kw in kws}
 
-# Priority system: Define priority levels (from 1 to n, where 1 is the highest priority)
+# Priority system: Define priority levels (1 is highest, n is lowest)
 tier_levels = list(range(1, 21))  # Example: tiers from 1 to 20 (you can extend this)
 
 # Session state to store tagged policies and their tags
@@ -28,14 +30,17 @@ if "tagged_policies" not in st.session_state:
 if "tags_in_use" not in st.session_state:
     st.session_state["tags_in_use"] = []
 
-# Categories, allow adding custom categories
-if "categories" not in st.session_state:
-    st.session_state["categories"] = ["Privacy", "Trust and Safety", "AI", "Ethics", "Government", "HR", "Social Media", "Hate Speech", "Adult Sexual Behavior", "General Body Exposure"]
+# Category of interest: Nudity and Sexual Activity
+category_name = "Nudity and Sexual Activity"
 
-if "linked_policies" not in st.session_state:
-    st.session_state["linked_policies"] = {}
-
-st.title("Policy Tagger (Keyword-Based with Categories, Tiers, Multitagging Control, and Policy Linking)")
+# Session state for specific category policies (you can modify this structure if needed)
+if "nudity_sexual_activity_policies" not in st.session_state:
+    st.session_state["nudity_sexual_activity_policies"] = [
+        {"title": "Adult sexual solicitation", "priority": 1},
+        {"title": "Adult sexual activity", "priority": 2},
+        {"title": "Adult sexual behavior", "priority": 3},
+        {"title": "General body exposure", "priority": 4}
+    ]
 
 # Input: Upload CSV or paste titles
 upload_option = st.radio("How would you like to input policies?", ["Paste titles", "Upload CSV", "Add Manually"])
@@ -58,14 +63,6 @@ else:
         else:
             st.error("CSV must have a 'title' column.")
 
-# Allow custom categories to be added
-st.sidebar.header("Add Custom Categories")
-new_category = st.sidebar.text_input("Enter new category")
-if new_category and new_category not in st.session_state["categories"]:
-    st.session_state["categories"].append(new_category)
-    st.sidebar.success(f"Category '{new_category}' added!")
-
-# Select category for each policy
 def extract_tags(title):
     tags = set()
     for word in title.lower().split():
@@ -74,62 +71,43 @@ def extract_tags(title):
                 tags.add(tag)
     return list(tags)
 
-def tag_policy(title, category, tier, allow_multitagging, linked_policies):
-    # Extract tags from title
-    tags = extract_tags(title)
+# Function to check if policy priority is valid when adding or modifying
+def validate_priority(new_priority, category_policies):
+    for policy in category_policies:
+        if policy["priority"] == new_priority:
+            return False  # Priority already exists
+    return True
 
-    # Check for overlapping tags with already tagged policies
-    conflicting_tags = [tag for tag in tags if tag in st.session_state["tags_in_use"]]
+# Add or modify policy
+def add_or_modify_policy(title, new_priority):
+    # Check if priority is valid
+    if not validate_priority(new_priority, st.session_state["nudity_sexual_activity_policies"]):
+        st.error(f"Priority {new_priority} is already assigned to another policy. Please choose a different priority.")
+        return
     
-    if conflicting_tags:
-        st.warning(f"Cannot tag '{title}' because the following tags are already in use by other policies: {', '.join(conflicting_tags)}.")
-        return None
-
-    # Check if the policy is linked to others
-    for linked_policy in linked_policies:
-        linked_tags = [tag for tag in tags if tag in linked_policy["tags"]]
-        if linked_tags and not allow_multitagging:
-            st.warning(f"Cannot tag '{title}' with these tags because it is linked with other policies that have already been tagged with the same tag: {', '.join(linked_tags)}.")
-            return None
-
-    # Check for priority conflicts (if a lower priority policy tries to be tagged after a higher priority policy)
-    for policy in st.session_state["tagged_policies"]:
-        if policy["category"] == category:
-            if policy["tier"] < tier:
-                st.warning(f"Cannot tag '{title}' because '{policy['title']}' has higher priority (tier {policy['tier']}) over this policy.")
-                return None
-
-    # If no conflict, add tags to the global tags_in_use list and tagged_policies
-    st.session_state["tags_in_use"].extend(tags)
-    st.session_state["tagged_policies"].append({"title": title, "category": category, "tier": tier, "tags": tags, "allow_multitagging": allow_multitagging, "linked_policies": linked_policies})
-    return {"title": title, "category": category, "tier": tier, "tags": tags, "allow_multitagging": allow_multitagging}
-
-def link_policies(policy_title, linked_policy_titles):
-    st.session_state["linked_policies"][policy_title] = linked_policy_titles
-    st.success(f"Policies '{', '.join(linked_policy_titles)}' are now linked with '{policy_title}'.")
-
-# Add Policies: Allow user to specify category, tier, multitagging option, and rename policies
-if titles:
-    st.markdown("### Add New Policies")
+    # Check if policy exists (modify if exists, otherwise add)
+    existing_policy = next((p for p in st.session_state["nudity_sexual_activity_policies"] if p["title"] == title), None)
     
-    for title in titles:
-        renamed_title = st.text_input(f"Rename policy '{title}' (optional)", value=title, key=f"{title}_rename")
-        category = st.selectbox(f"Select category for '{renamed_title}'", st.session_state["categories"], key=f"{renamed_title}_category")
-        tier = st.selectbox(f"Select tier for '{renamed_title}'", tier_levels, key=f"{renamed_title}_tier")
-        allow_multitagging = st.checkbox(f"Allow multitagging for '{renamed_title}'", value=True, key=f"{renamed_title}_multitag")
-        
-        linked_policies_titles = st.multiselect(f"Select linked policies for '{renamed_title}'", titles, key=f"{renamed_title}_linked")
-        if st.button(f"Tag and Link '{renamed_title}'", key=f"{renamed_title}_tag"):
-            result = tag_policy(renamed_title, category, tier, allow_multitagging, linked_policies_titles)
-            if result:
-                st.success(f"Policy '{renamed_title}' tagged successfully under category '{category}' with tier '{tier}'.")
-                link_policies(renamed_title, linked_policies_titles)
+    if existing_policy:
+        existing_policy["priority"] = new_priority
+        st.success(f"Policy '{title}' updated to priority {new_priority}.")
+    else:
+        st.session_state["nudity_sexual_activity_policies"].append({"title": title, "priority": new_priority})
+        st.success(f"Policy '{title}' added with priority {new_priority}.")
 
-    # Display tagged policies
-    if st.session_state["tagged_policies"]:
-        df_out = pd.DataFrame(st.session_state["tagged_policies"])
-        st.dataframe(df_out)
+# Display current policies
+st.markdown("### Current Policies in 'Nudity and Sexual Activity' Category")
+df_out = pd.DataFrame(st.session_state["nudity_sexual_activity_policies"])
+st.dataframe(df_out)
 
-    # Export the results
-    csv = df_out.to_csv(index=False).encode("utf-8")
-    st.download_button("Download CSV", csv, "tagged_policies.csv", "text/csv")
+# Add or modify policies
+st.markdown("### Add or Modify a Policy")
+new_title = st.text_input("Enter the policy title (e.g., 'Adult sexual solicitation')")
+new_priority = st.selectbox("Select the priority for this policy (1 is highest)", list(range(1, len(st.session_state["nudity_sexual_activity_policies"]) + 2)))
+
+if st.button(f"Add or Modify '{new_title}'"):
+    add_or_modify_policy(new_title, new_priority)
+
+# Export the results
+csv = df_out.to_csv(index=False).encode("utf-8")
+st.download_button("Download CSV", csv, "tagged_policies.csv", "text/csv")
