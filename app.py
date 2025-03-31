@@ -21,7 +21,7 @@ priority_levels = ["High", "Medium", "Low"]
 # Session state to store tagged policies and their tags
 if "tagged_policies" not in st.session_state:
     st.session_state["tagged_policies"] = []
-    
+
 if "tags_in_use" not in st.session_state:
     st.session_state["tags_in_use"] = []
 
@@ -64,7 +64,7 @@ def tag_policy(title, priority):
     conflicting_tags = [tag for tag in tags if tag in st.session_state["tags_in_use"]]
     
     if conflicting_tags:
-        st.warning(f"The policy conflicts with existing tags: {', '.join(conflicting_tags)}. This policy has a lower priority and cannot be tagged with them.")
+        st.warning(f"Cannot tag '{title}' because the following tags are already in use by higher priority policies: {', '.join(conflicting_tags)}.")
         return None
 
     # If no conflict, add tags to the global tags_in_use list and tagged_policies
@@ -72,9 +72,38 @@ def tag_policy(title, priority):
     st.session_state["tagged_policies"].append({"title": title, "tags": tags, "priority": priority})
     return {"title": title, "tags": tags, "priority": priority}
 
+def modify_policy(index, new_title):
+    st.session_state["tagged_policies"][index]["title"] = new_title
+
+def remove_policy(index):
+    policy_to_remove = st.session_state["tagged_policies"][index]
+    # Remove associated tags from the tags_in_use list
+    for tag in policy_to_remove["tags"]:
+        st.session_state["tags_in_use"].remove(tag)
+    st.session_state["tagged_policies"].pop(index)
+
+# Display existing policies
+if st.session_state["tagged_policies"]:
+    st.markdown("### Existing Policies")
+    df_existing = pd.DataFrame(st.session_state["tagged_policies"])
+    st.dataframe(df_existing)
+
+    # Modify or remove existing policies
+    st.markdown("### Modify or Remove Policies")
+    policy_to_modify = st.selectbox("Select policy to modify", options=range(len(st.session_state["tagged_policies"])), format_func=lambda x: st.session_state["tagged_policies"][x]["title"])
+    
+    new_title = st.text_input("New title for the selected policy", value=st.session_state["tagged_policies"][policy_to_modify]["title"])
+    if st.button("Modify Policy"):
+        modify_policy(policy_to_modify, new_title)
+        st.success(f"Policy '{new_title}' updated successfully.")
+    
+    if st.button("Remove Policy"):
+        remove_policy(policy_to_modify)
+        st.success("Policy removed successfully.")
+
 # Tagging Policies: Allow user to specify priority
 if titles:
-    st.markdown("### Results")
+    st.markdown("### Tag New Policies")
     
     # Allow tagging with priority
     for title in titles:
