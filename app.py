@@ -36,6 +36,18 @@ def extract_tags(title):
                 tags.add(tag)
     return list(tags)
 
+# Function to check for conflicts
+def check_conflicts(selected_policies):
+    conflicts = []
+    # Loop through the selected policies and check for conflicts
+    for policy in selected_policies:
+        conflicting_policies = st.session_state["policy_conflicts"].get(policy, [])
+        # Check if any conflicting policy is also selected
+        for conflict in conflicting_policies:
+            if conflict in selected_policies:
+                conflicts.append(f"{policy} conflicts with {conflict}")
+    return conflicts
+
 # Function to check if the first policy is tagged and remove lower priority policies
 def handle_priority_conflict(selected_policies):
     if highest_priority_policy in selected_policies:
