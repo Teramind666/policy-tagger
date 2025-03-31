@@ -10,6 +10,7 @@ tag_rules = {
     "government": ["government", "state", "public sector"],
     "HR": ["employee", "HR", "conduct", "behavior"],
     "social media": ["social media", "Facebook", "Twitter", "Instagram"],
+    "hate speech": ["hate speech", "racism", "discrimination", "offensive language"],
 }
 
 # Reverse map: keyword -> tag
@@ -18,6 +19,9 @@ keyword_to_tag = {kw.lower(): tag for tag, kws in tag_rules.items() for kw in kw
 # Priority system: Define priority levels (High > Medium > Low)
 priority_levels = ["High", "Medium", "Low"]
 
+# Tier options: 5-level or 7-level tier system
+tier_levels = [5, 7]
+
 # Session state to store tagged policies and their tags
 if "tagged_policies" not in st.session_state:
     st.session_state["tagged_policies"] = []
@@ -25,7 +29,11 @@ if "tagged_policies" not in st.session_state:
 if "tags_in_use" not in st.session_state:
     st.session_state["tags_in_use"] = []
 
-st.title("Policy Tagger (Keyword-Based with Priority)")
+# Categories, allow adding custom categories
+if "categories" not in st.session_state:
+    st.session_state["categories"] = ["Privacy", "Trust and Safety", "AI", "Ethics", "Government", "HR", "Social Media", "Hate Speech"]
+
+st.title("Policy Tagger (Keyword-Based with Categories, Tiers, and Multitagging Option)")
 
 # Input: Upload CSV or paste titles
 upload_option = st.radio("How would you like to input policies?", ["Paste titles", "Upload CSV", "Add Manually"])
@@ -48,6 +56,14 @@ else:
         else:
             st.error("CSV must have a 'title' column.")
 
+# Allow custom categories to be added
+st.sidebar.header("Add Custom Categories")
+new_category = st.sidebar.text_input("Enter new category")
+if new_category and new_category not in st.session_state["categories"]:
+    st.session_state["categories"].append(new_category)
+    st.sidebar.success(f"Category '{new_category}' added!")
+
+# Select category for each policy
 def extract_tags(title):
     tags = set()
     for word in title.lower().split():
@@ -56,64 +72,38 @@ def extract_tags(title):
                 tags.add(tag)
     return list(tags)
 
-def tag_policy(title, priority):
+def tag_policy(title, category, tier, allow_multitagging):
     # Extract tags from title
     tags = extract_tags(title)
 
-    # Check for overlapping tags with already tagged policies
-    conflicting_tags = [tag for tag in tags if tag in st.session_state["tags_in_use"]]
-    
-    if conflicting_tags:
-        st.warning(f"Cannot tag '{title}' because the following tags are already in use by higher priority policies: {', '.join(conflicting_tags)}.")
-        return None
+    # Check if the policy should allow multitagging
+    if not allow_multitagging:
+        # Check for overlapping tags with already tagged policies
+        conflicting_tags = [tag for tag in tags if tag in st.session_state["tags_in_use"]]
+        if conflicting_tags:
+            st.warning(f"Cannot tag '{title}' because the following tags are already in use by other policies: {', '.join(conflicting_tags)}.")
+            return None
 
     # If no conflict, add tags to the global tags_in_use list and tagged_policies
     st.session_state["tags_in_use"].extend(tags)
-    st.session_state["tagged_policies"].append({"title": title, "tags": tags, "priority": priority})
-    return {"title": title, "tags": tags, "priority": priority}
+    st.session_state["tagged_policies"].append({"title": title, "category": category, "tier": tier, "tags": tags, "allow_multitagging": allow_multitagging})
+    return {"title": title, "category": category, "tier": tier, "tags": tags, "allow_multitagging": allow_multitagging}
 
-def modify_policy(index, new_title):
-    st.session_state["tagged_policies"][index]["title"] = new_title
-
-def remove_policy(index):
-    policy_to_remove = st.session_state["tagged_policies"][index]
-    # Remove associated tags from the tags_in_use list
-    for tag in policy_to_remove["tags"]:
-        st.session_state["tags_in_use"].remove(tag)
-    st.session_state["tagged_policies"].pop(index)
-
-# Display existing policies
-if st.session_state["tagged_policies"]:
-    st.markdown("### Existing Policies")
-    df_existing = pd.DataFrame(st.session_state["tagged_policies"])
-    st.dataframe(df_existing)
-
-    # Modify or remove existing policies
-    st.markdown("### Modify or Remove Policies")
-    policy_to_modify = st.selectbox("Select policy to modify", options=range(len(st.session_state["tagged_policies"])), format_func=lambda x: st.session_state["tagged_policies"][x]["title"])
-    
-    new_title = st.text_input("New title for the selected policy", value=st.session_state["tagged_policies"][policy_to_modify]["title"])
-    if st.button("Modify Policy"):
-        modify_policy(policy_to_modify, new_title)
-        st.success(f"Policy '{new_title}' updated successfully.")
-    
-    if st.button("Remove Policy"):
-        remove_policy(policy_to_modify)
-        st.success("Policy removed successfully.")
-
-# Tagging Policies: Allow user to specify priority
+# Add Policies: Allow user to specify category, tier, multitagging option, and rename policies
 if titles:
-    st.markdown("### Tag New Policies")
+    st.markdown("### Add New Policies")
     
-    # Allow tagging with priority
     for title in titles:
-        priority = st.selectbox(f"Priority for '{title}'", priority_levels, key=f"{title}_priority")
-        
-        if st.button(f"Tag '{title}'", key=f"{title}_tag"):
-            result = tag_policy(title, priority)
+        renamed_title = st.text_input(f"Rename policy '{title}' (optional)", value=title, key=f"{title}_rename")
+        category = st.selectbox(f"Select category for '{renamed_title}'", st.session_state["categories"], key=f"{renamed_title}_category")
+        tier = st.selectbox(f"Select tier for '{renamed_title}'", tier_levels, key=f"{renamed_title}_tier")
+        allow_multitagging = st.checkbox(f"Allow multitagging for '{renamed_title}'", value=True, key=f"{renamed_title}_multitag")
+
+        if st.button(f"Tag '{renamed_title}'", key=f"{renamed_title}_tag"):
+            result = tag_policy(renamed_title, category, tier, allow_multitagging)
             if result:
-                st.success(f"Policy '{title}' tagged successfully with {', '.join(result['tags'])}.")
-    
+                st.success(f"Policy '{renamed_title}' tagged successfully under category '{category}' with tier '{tier}'.")
+
     # Display tagged policies
     if st.session_state["tagged_policies"]:
         df_out = pd.DataFrame(st.session_state["tagged_policies"])
