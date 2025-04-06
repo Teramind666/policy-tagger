@@ -16,23 +16,28 @@ st.title("Policy Tagging Tool")
 
 # Section to manage policies
 with st.expander("🛠️ Manage Policies"):
+    st.subheader("Add or Update a Policy")
     policy_name = st.text_input("Policy name")
-    priority = st.number_input("Priority (1 = highest)", min_value=1, step=1)
-    instructions = st.text_area("Instructions")
-    conflicts = st.multiselect("Conflicts with", list(st.session_state.policies.keys()))
+    priority = st.number_input("Priority (1 = highest)", min_value=1, step=1, key="priority_input")
+    instructions = st.text_area("Instructions", key="instructions_input")
+    conflicts = st.multiselect("Conflicts with", list(st.session_state.policies.keys()), key="conflicts_input")
 
     if st.button("Add/Update Policy"):
-        st.session_state.policies[policy_name] = {
-            "priority": priority,
-            "conflicts": conflicts,
-            "instructions": instructions
-        }
-        st.success(f"Policy '{policy_name}' added/updated.")
+        if policy_name:
+            st.session_state.policies[policy_name] = {
+                "priority": priority,
+                "conflicts": conflicts,
+                "instructions": instructions
+            }
+            st.success(f"Policy '{policy_name}' has been added or updated.")
+        else:
+            st.error("Please enter a policy name.")
 
-    to_delete = st.selectbox("Select policy to delete", ["None"] + list(st.session_state.policies.keys()))
+    st.subheader("Delete a Policy")
+    to_delete = st.selectbox("Select a policy to delete", ["None"] + list(st.session_state.policies.keys()), key="delete_select")
     if st.button("Delete Policy") and to_delete != "None":
         del st.session_state.policies[to_delete]
-        st.success(f"Policy '{to_delete}' deleted.")
+        st.success(f"Policy '{to_delete}' has been deleted.")
 
 # Policy tagging area
 st.markdown("### 🔍 Tag Policies")
