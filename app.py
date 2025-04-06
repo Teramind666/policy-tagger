@@ -68,9 +68,16 @@ if policy_to_tag != "-- Select a policy --":
         st.session_state.tagged.append(policy_to_tag)
         st.success(f"✅ '{policy_to_tag}' tagged successfully.")
 
+# Display currently tagged policies
 st.markdown("### 🏷️ Currently Tagged Policies")
 if st.session_state.tagged:
     for t in st.session_state.tagged:
-        st.write(f"- **{t}** — _{st.session_state.policies[t]['instructions']}_")
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.write(f"- **{t}** — _{st.session_state.policies[t]['instructions']}_")
+        with col2:
+            if st.button("❌ Untag", key=f"untag_{t}"):
+                st.session_state.tagged.remove(t)
+                st.success(f"'{t}' has been untagged.")
 else:
     st.info("No policies tagged yet. Select one above to start.")
