@@ -12,7 +12,7 @@ if "policies" not in st.session_state:
 if "tagged" not in st.session_state:
     st.session_state.tagged = []
 
-st.title("Policy Tagging Tool")
+st.title("🛡️ Policy Tagging Tool")
 
 # Section to manage policies
 with st.expander("🛠️ Manage Policies"):
@@ -39,38 +39,38 @@ with st.expander("🛠️ Manage Policies"):
         del st.session_state.policies[to_delete]
         st.success(f"Policy '{to_delete}' has been deleted.")
 
-# Policy tagging area
+# Tagging section
 st.markdown("### 🔍 Tag Policies")
-search_input = st.text_input("Type policy to tag")
+all_policies = list(st.session_state.policies.keys())
+policy_to_tag = st.selectbox("Select a policy to tag", ["-- Select a policy --"] + all_policies, key="tag_selector")
 
-if search_input and st.button("Tag Policy"):
-    policy = search_input.strip()
-    if policy not in st.session_state.policies:
-        st.error("Policy not found. Please add it first.")
-    else:
-        conflicts = st.session_state.policies[policy]["conflicts"]
-        priority = st.session_state.policies[policy]["priority"]
+if policy_to_tag != "-- Select a policy --":
+    conflicts = st.session_state.policies[policy_to_tag]["conflicts"]
+    priority = st.session_state.policies[policy_to_tag]["priority"]
+    blocked = False
+    to_remove = None
 
-        blocked = False
-        for existing in st.session_state.tagged:
-            existing_priority = st.session_state.policies[existing]["priority"]
-            if existing in conflicts:
-                if priority < existing_priority:
-                    st.session_state.tagged.remove(existing)
-                    st.warning(f"'{existing}' removed because '{policy}' has higher priority.")
-                    break
-                else:
-                    st.warning(f"Cannot tag '{policy}' with '{existing}' due to conflict.")
-                    blocked = True
-                    break
+    for existing in st.session_state.tagged:
+        existing_priority = st.session_state.policies[existing]["priority"]
+        if existing in conflicts:
+            if priority < existing_priority:
+                to_remove = existing
+                break
+            else:
+                st.warning(f"❌ Cannot tag '{policy_to_tag}' with '{existing}' due to conflict. '{existing}' has higher priority.")
+                blocked = True
+                break
 
-        if not blocked and policy not in st.session_state.tagged:
-            st.session_state.tagged.append(policy)
-            st.success(f"'{policy}' tagged successfully.")
+    if not blocked and policy_to_tag not in st.session_state.tagged:
+        if to_remove:
+            st.session_state.tagged.remove(to_remove)
+            st.warning(f"⚠️ '{to_remove}' removed because '{policy_to_tag}' has higher priority.")
+        st.session_state.tagged.append(policy_to_tag)
+        st.success(f"✅ '{policy_to_tag}' tagged successfully.")
 
-st.markdown("### 🏷️ Tagged Policies")
+st.markdown("### 🏷️ Currently Tagged Policies")
 if st.session_state.tagged:
     for t in st.session_state.tagged:
-        st.write(f"- {t} ({st.session_state.policies[t]['instructions']})")
+        st.write(f"- **{t}** — _{st.session_state.policies[t]['instructions']}_")
 else:
-    st.info("No policies tagged yet.")
+    st.info("No policies tagged yet. Select one above to start.")
